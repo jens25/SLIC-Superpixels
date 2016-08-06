@@ -21,7 +21,6 @@ Slic::~Slic() {
  * Output: -
  */
 void Slic::clear_data() {
-    clusters.clear();
     centers.clear();
     center_counts.clear();
 }
@@ -30,20 +29,12 @@ void Slic::clear_data() {
  * Initialize the cluster centers and initial values of the pixel-wise cluster
  * assignment and distance values.
  *
- * Input : The image (cv::Mat*).
+ * Input : The image (cv::Mat).
  * Output: -
  */
 void Slic::init_data(const cv::Mat &image) {
     /* Initialize the cluster and distance matrices. */
-    for (int i = 0; i < image.cols; i++) { 
-        vector<int> cr;
-        vector<double> dr;
-        for (int j = 0; j < image.rows; j++) {
-            cr.push_back(-1);
-        }
-        clusters.push_back(cr);
-    }
-    
+    clusters = cv::Mat(image.size(), CV_32S, cv::Scalar(-1));
     /* Initialize the centers and counters. */
     for (int i = step; i < image.cols - step/2; i += step) {
         for (int j = step; j < image.rows - step/2; j += step) {
@@ -79,9 +70,6 @@ double Slic::compute_dist(int ci, cv::Point pixel, cv::Vec3b colour) {
     double ds = sqrt(pow(centers[ci][3] - pixel.x, 2) + pow(centers[ci][4] - pixel.y, 2));
     
     return sqrt(pow(dc / nc, 2) + pow(ds / ns, 2));
-    
-    //double w = 1.0 / (pow(ns / nc, 2));
-    //return sqrt(dc) + sqrt(ds * w);
 }
 
 /*
@@ -148,7 +136,7 @@ void Slic::generate_superpixels(cv::Mat &image, int step, int nc) {
                            distance. */
                         if (d < distances.at<float>(l, k)) {
                             distances.at<float>(l, k) = d;
-                            clusters[k][l] = j;
+                            clusters.at<int>(l, k) = j;
                         }
                     }
                 }
@@ -164,7 +152,7 @@ void Slic::generate_superpixels(cv::Mat &image, int step, int nc) {
         /* Compute the new cluster centers. */
         for (int j = 0; j < image.cols; j++) {
             for (int k = 0; k < image.rows; k++) {
-                int c_id = clusters[j][k];
+                int c_id = clusters.at<int>(k, j);
                 
                 if (c_id != -1) {
                     cv::Vec3b colour = image.at<cv::Vec3b>(k, j);
@@ -205,19 +193,13 @@ void Slic::create_connectivity(cv::Mat &image) {
     const int dx4[4] = {-1,  0,  1,  0};
 	const int dy4[4] = { 0, -1,  0,  1};
     
+
     /* Initialize the new cluster matrix. */
-    vec2di new_clusters;
-    for (int i = 0; i < image.cols; i++) { 
-        vector<int> nc;
-        for (int j = 0; j < image.rows; j++) {
-            nc.push_back(-1);
-        }
-        new_clusters.push_back(nc);
-    }
+    cv::Mat new_clusters(image.size(), CV_32S, cv::Scalar(-1));
 
     for (int i = 0; i < image.cols; i++) {
         for (int j = 0; j < image.rows; j++) {
-            if (new_clusters[i][j] == -1) {
+            if (new_clusters.at<int>(j, i) == -1) {
                 vector<cv::Point> elements;
                 elements.push_back(cv::Point(i, j));
             
@@ -226,8 +208,8 @@ void Slic::create_connectivity(cv::Mat &image) {
                     int x = elements[0].x + dx4[k], y = elements[0].y + dy4[k];
                     
                     if (x >= 0 && x < image.cols && y >= 0 && y < image.rows) {
-                        if (new_clusters[x][y] >= 0) {
-                            adjlabel = new_clusters[x][y];
+                        if (new_clusters.at<int>(y, x) >= 0) {
+                            adjlabel = new_clusters.at<int>(y, x);
                         }
                     }
                 }
@@ -238,9 +220,9 @@ void Slic::create_connectivity(cv::Mat &image) {
                         int x = elements[c].x + dx4[k], y = elements[c].y + dy4[k];
                         
                         if (x >= 0 && x < image.cols && y >= 0 && y < image.rows) {
-                            if (new_clusters[x][y] == -1 && clusters[i][j] == clusters[x][y]) {
+                            if (new_clusters.at<int>(y, x) == -1 && clusters.at<int>(j, i) == clusters.at<int>(y, x)) {
                                 elements.push_back(cv::Point(x, y));
-                                new_clusters[x][y] = label;
+                                new_clusters.at<int>(y, x) = label;
                                 count += 1;
                             }
                         }
@@ -251,7 +233,7 @@ void Slic::create_connectivity(cv::Mat &image) {
                    smaller than a limit. */
                 if (count <= lims >> 2) {
                     for (int c = 0; c < count; c++) {
-                        new_clusters[elements[c].x][elements[c].y] = adjlabel;
+                        new_clusters.at<int>(elements[c].y, elements[c].x) = adjlabel;
                     }
                     label -= 1;
                 }
@@ -286,15 +268,8 @@ void Slic::display_contours(cv::Mat &image, cv::Scalar colour) {
 	/* Initialize the contour vector and the matrix detailing whether a pixel
 	 * is already taken to be a contour. */
 	vector<cv::Point> contours;
-	vec2db istaken;
-	for (int i = 0; i < image.cols; i++) { 
-        vector<bool> nb;
-        for (int j = 0; j < image.rows; j++) {
-            nb.push_back(false);
-        }
-        istaken.push_back(nb);
-    }
-    
+    cv::Mat istaken(image.size(), CV_8UC1, cv::Scalar(0));
+   
     /* Go through all the pixels. */
     for (int i = 0; i < image.cols; i++) {
         for (int j = 0; j < image.rows; j++) {
@@ -305,7 +280,7 @@ void Slic::display_contours(cv::Mat &image, cv::Scalar colour) {
                 int x = i + dx8[k], y = j + dy8[k];
                 
                 if (x >= 0 && x < image.cols && y >= 0 && y < image.rows) {
-                    if (istaken[x][y] == false && clusters[i][j] != clusters[x][y]) {
+                    if (istaken.at<char>(y, x) == 0 && clusters.at<int>(j, i) != clusters.at<int>(y, x)) {
                         nr_p += 1;
                     }
                 }
@@ -314,7 +289,7 @@ void Slic::display_contours(cv::Mat &image, cv::Scalar colour) {
             /* Add the pixel to the contour list if desired. */
             if (nr_p >= 2) {
                 contours.push_back(cv::Point(i,j));
-                istaken[i][j] = true;
+                istaken.at<char>(j, i) = 1;
             }
         }
     }
@@ -340,7 +315,7 @@ void Slic::colour_with_cluster_means(cv::Mat &image) {
     /* Gather the colour values per cluster. */
     for (int i = 0; i < image.cols; i++) {
         for (int j = 0; j < image.rows; j++) {
-            int index = clusters[i][j];
+            int index = clusters.at<int>(j, i);
             cv::Vec3b colour = image.at<cv::Vec3b>(j, i);
             
             colours[index].val[0] += colour.val[0];
@@ -359,7 +334,7 @@ void Slic::colour_with_cluster_means(cv::Mat &image) {
     /* Fill in. */
     for (int i = 0; i < image.cols; i++) {
         for (int j = 0; j < image.rows; j++) {
-            cv::Vec3b ncolour = colours[clusters[i][j]];
+            cv::Vec3b ncolour = colours[clusters.at<int>(j, i)];
             image.at<cv::Vec3b>(j, i) = ncolour;
         }
     }

@@ -15,6 +15,7 @@
 
 //#include <opencv/cv.h>
 #include <opencv2/core/core.hpp>
+ #include <opencv2/highgui/highgui.hpp>
 #include <stdio.h>
 #include <math.h>
 #include <vector>
@@ -23,8 +24,6 @@ using namespace std;
 
 /* 2d matrices are handled by 2d vectors. */
 #define vec2dd vector<vector<double> >
-#define vec2di vector<vector<int> >
-#define vec2db vector<vector<bool> >
 /* The number of iterations run by the clustering algorithm. */
 #define NR_ITERATIONS 10
 
@@ -38,8 +37,8 @@ using namespace std;
 class Slic {
     private:
         /* The cluster assignments and distance values for each pixel. */
-        vec2di clusters;
-        
+        //vec2di clusters;
+        cv::Mat clusters;
         /* The LAB and xy values of the centers. */
         vec2dd centers;
         /* The number of occurences of each center. */
