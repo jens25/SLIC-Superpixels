@@ -39,7 +39,6 @@ class Slic {
     private:
         /* The cluster assignments and distance values for each pixel. */
         vec2di clusters;
-        vec2dd distances;
         
         /* The LAB and xy values of the centers. */
         vec2dd centers;

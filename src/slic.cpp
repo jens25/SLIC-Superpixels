@@ -22,7 +22,6 @@ Slic::~Slic() {
  */
 void Slic::clear_data() {
     clusters.clear();
-    distances.clear();
     centers.clear();
     center_counts.clear();
 }
@@ -41,10 +40,8 @@ void Slic::init_data(const cv::Mat &image) {
         vector<double> dr;
         for (int j = 0; j < image.rows; j++) {
             cr.push_back(-1);
-            dr.push_back(FLT_MAX);
         }
         clusters.push_back(cr);
-        distances.push_back(dr);
     }
     
     /* Initialize the centers and counters. */
@@ -100,16 +97,9 @@ cv::Point Slic::find_local_minimum(const cv::Mat &image, cv::Point center) {
     
     for (int i = center.x-1; i < center.x+2; i++) {
         for (int j = center.y-1; j < center.y+2; j++) {
-            cv::Vec3b c1 = image.at<cv::Vec3b>(j+1, i);
-            cv::Vec3b c2 = image.at<cv::Vec3b>(j, i+1);
-            cv::Vec3b c3 = image.at<cv::Vec3b>(j, i);
-            /* Convert colour values to grayscale values. */
-            double i1 = c1.val[0];
-            double i2 = c2.val[0];
-            double i3 = c3.val[0];
-            /*double i1 = c1.val[0] * 0.11 + c1.val[1] * 0.59 + c1.val[2] * 0.3;
-            double i2 = c2.val[0] * 0.11 + c2.val[1] * 0.59 + c2.val[2] * 0.3;
-            double i3 = c3.val[0] * 0.11 + c3.val[1] * 0.59 + c3.val[2] * 0.3;*/
+            double i1 = image.at<cv::Vec3b>(j+1, i)[0];
+            double i2 = image.at<cv::Vec3b>(j, i+1)[0];
+            double i3 = image.at<cv::Vec3b>(j, i)[0];
             
             /* Compute horizontal and vertical gradients and keep track of the
                minimum. */
@@ -128,7 +118,7 @@ cv::Point Slic::find_local_minimum(const cv::Mat &image, cv::Point center) {
  * Compute the over-segmentation based on the step-size and relative weighting
  * of the pixel and colour values.
  *
- * Input : The Lab image (cv::Mat*), the stepsize (int), and the weight (int).
+ * Input : The Lab image (cv::Mat), the stepsize (int), and the weight (int).
  * Output: -
  */
 void Slic::generate_superpixels(cv::Mat &image, int step, int nc) {
@@ -143,12 +133,7 @@ void Slic::generate_superpixels(cv::Mat &image, int step, int nc) {
     /* Run EM for 10 iterations (as prescribed by the algorithm). */
     for (int i = 0; i < NR_ITERATIONS; i++) {
         /* Reset distance values. */
-        for (int j = 0; j < image.cols; j++) {
-            for (int k = 0;k < image.rows; k++) {
-                distances[j][k] = FLT_MAX;
-            }
-        }
-
+        cv::Mat distances(image.size(), CV_32FC1, FLT_MAX);
         for (int j = 0; j < (int) centers.size(); j++) {
             /* Only compare to pixels in a 2 x step by 2 x step region. */
             for (int k = centers[j][3] - step; k < centers[j][3] + step; k++) {
@@ -161,8 +146,8 @@ void Slic::generate_superpixels(cv::Mat &image, int step, int nc) {
                         
                         /* Update cluster allocation if the cluster minimizes the
                            distance. */
-                        if (d < distances[k][l]) {
-                            distances[k][l] = d;
+                        if (d < distances.at<float>(l, k)) {
+                            distances.at<float>(l, k) = d;
                             clusters[k][l] = j;
                         }
                     }
